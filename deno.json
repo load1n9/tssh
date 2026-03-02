@@ -1,0 +1,25 @@
+{
+  "name": "@loading/ssh",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts",
+    "./client": "./src/client/mod.ts",
+    "./server": "./src/server/mod.ts",
+    "./sftp": "./src/sftp/mod.ts",
+    "./agent": "./src/agent/mod.ts",
+    "./auth": "./src/auth/mod.ts",
+    "./connection": "./src/connection/mod.ts",
+    "./crypto": "./src/crypto/mod.ts",
+    "./protocol": "./src/protocol/mod.ts",
+    "./transport": "./src/transport/mod.ts",
+    "./utils": "./src/utils/mod.ts"
+  },
+  "tasks": {
+    "check": "deno check mod.ts",
+    "lint": "andromeda lint",
+    "fmt": "andromeda fmt"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
