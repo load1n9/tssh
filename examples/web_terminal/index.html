@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tssh — Web Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; background: #1a1b26; color: #c0caf5; font-family: system-ui, sans-serif; }
+
+    #app {
+      display: flex; flex-direction: column; height: 100%;
+    }
+
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; background: #16161e; border-bottom: 1px solid #292e42;
+    }
+    header h1 { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
+    header .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #565f89; transition: background .3s;
+    }
+    header .dot.connected { background: #9ece6a; }
+    header .status { font-size: 12px; color: #565f89; }
+
+    #terminal-container {
+      flex: 1; padding: 4px; overflow: hidden;
+    }
+
+    /* Make xterm fill the container */
+    #terminal-container .xterm { height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>tssh web terminal</h1>
+      <span class="dot" id="dot"></span>
+      <span class="status" id="status">connecting…</span>
+    </header>
+    <div id="terminal-container"></div>
+  </div>
+
+  <script type="module">
+    import { Terminal }   from "https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/+esm";
+    import { FitAddon }   from "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/+esm";
+    import { WebLinksAddon } from "https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/+esm";
+
+    // -----------------------------------------------------------------------
+    // Terminal setup
+    // -----------------------------------------------------------------------
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+      theme: {
+        background: "#1a1b26",
+        foreground: "#c0caf5",
+        cursor:     "#c0caf5",
+        black:      "#15161e", red:     "#f7768e",
+        green:      "#9ece6a", yellow:  "#e0af68",
+        blue:       "#7aa2f7", magenta: "#bb9af7",
+        cyan:       "#7dcfff", white:   "#a9b1d6",
+        brightBlack:"#414868", brightRed:"#f7768e",
+        brightGreen:"#9ece6a", brightYellow:"#e0af68",
+        brightBlue: "#7aa2f7", brightMagenta:"#bb9af7",
+        brightCyan: "#7dcfff", brightWhite:"#c0caf5",
+      },
+    });
+
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(new WebLinksAddon());
+    term.open(document.getElementById("terminal-container"));
+    fitAddon.fit();
+
+    // -----------------------------------------------------------------------
+    // Status helpers
+    // -----------------------------------------------------------------------
+    const dot    = document.getElementById("dot");
+    const status = document.getElementById("status");
+
+    function setStatus(text, connected) {
+      status.textContent = text;
+      dot.classList.toggle("connected", connected);
+    }
+
+    // -----------------------------------------------------------------------
+    // WebSocket connection
+    // -----------------------------------------------------------------------
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+    ws.binaryType = "arraybuffer";
+
+    ws.addEventListener("open", () => {
+      setStatus("connected", true);
+      // Send initial terminal size
+      ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+    });
+
+    ws.addEventListener("message", (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        term.write(new Uint8Array(event.data));
+      } else {
+        term.write(event.data);
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      setStatus("disconnected", false);
+      term.write("\r\n\x1b[90m[session ended]\x1b[0m\r\n");
+    });
+
+    ws.addEventListener("error", () => {
+      setStatus("error", false);
+    });
+
+    // -----------------------------------------------------------------------
+    // Terminal input ➜ WebSocket
+    // -----------------------------------------------------------------------
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // -----------------------------------------------------------------------
+    // Resize handling
+    // -----------------------------------------------------------------------
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+      }
+    });
+    resizeObserver.observe(document.getElementById("terminal-container"));
+
+    // Focus terminal
+    term.focus();
+  </script>
+</body>
+</html>
